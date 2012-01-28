@@ -8,8 +8,6 @@ window.toSRTTime = (seconds) ->
   sprintf "%02d:%02d:%02d,%s", hours, minutes, seconds, milliseconds
 
 # TODO:
-# remove chapter markers
-# remove all chapter markers
 # change start/end times on markers
 # Enter video url
 # highlight chapter markers as the are active
@@ -26,7 +24,9 @@ Captionr.Models.Marker = Backbone.Model.extend
 
 Captionr.Collections.Markers = Backbone.Collection.extend
   model: Captionr.Models.Marker
-  localStorage: new Store("markers")
+
+  initializeStore: (videoId) ->
+    @localStorage = new Store "markers-video-#{videoId}"
 
   toSRT: ->
     @reduce(
@@ -40,13 +40,16 @@ Captionr.Collections.Markers = Backbone.Collection.extend
       model.destroy()
 
 class VideoPlaybackSession
+  offset: 0.5
+
   constructor: (@video) ->
   
   start: ->
-    @startTime = @video.played.end(@video.played.length - 1)
+    startTime = @video.played.end(@video.played.length - 1) - @offset
+    @startTime = startTime
 
-  end: ->
-    @endTime = @video.played.end(@video.played.length - 1)
+  currentTime: ->
+    @video.played.end(@video.played.length - 1) - @offset
   
 
 Captionr.Views.Video = Backbone.View.extend
@@ -60,33 +63,38 @@ Captionr.Views.Video = Backbone.View.extend
     $(@el).html(@template(@model.toJSON()))
     @
 
+  startedCaptionSession: ->
+    @session?
+
   startCaptionSession: ->
-    console.log 'starting caption session'
     @session = new VideoPlaybackSession($('video')[0])
     @session.start()
 
   endCaptionSession: ->
-    console.log 'ending caption session'
-    @session.end()
+    @session = null
 
   getLastSessionStartTime: ->
     @session.startTime
 
-  getLastSessionEndTime: ->
-    @session.endTime
+  getCurrentSessionTime: ->
+    @session.currentTime()
 
 
 Captionr.Views.Marker = Backbone.View.extend
   tagName: 'li'
   template: _.template(
     '''
+      <a href='#' class=remove>X</a>
       <span class='start-time'>{{ startTime }}</span> - <span class='end-time'>{{ endTime }}</span>
       <blockquote>{{ caption }}</blockquote>
     '''
   )
 
+  events:
+    'click .remove': 'clear'
+
   initialize: ->
-    _.bindAll @, 'render', 'remove'
+    _.bindAll @, 'render', 'remove', 'clear'
     @model.bind 'change', @render
     @model.bind 'destroy', @remove
 
@@ -96,6 +104,9 @@ Captionr.Views.Marker = Backbone.View.extend
 
   remove: ->
     $(@el).remove()
+
+  clear: ->
+    @model.destroy()
 
 Captionr.Views.App = Backbone.View.extend
   el: '#captionr'
@@ -131,23 +142,21 @@ Captionr.Views.App = Backbone.View.extend
     @collection.each @addOne
 
   manageCaptionSession: (e) ->
-    text = @input.val()
-    
-    if text.length == 1
-      @video.startCaptionSession()
+    return if e.keyCode == 13 # they pressed enter, let createOnEnter handle this
+
+    @video.startCaptionSession() unless @video.startedCaptionSession()
   
   createOnEnter: (e) ->
     text = @input.val()
     
     return unless text.length > 0 and e.keyCode == 13
 
-    @video.endCaptionSession()
-
     @collection.create
       caption: text
       startTime: @video.getLastSessionStartTime()
-      endTime: @video.getLastSessionEndTime()
-    
+      endTime: @video.getCurrentSessionTime()
+
+    @video.endCaptionSession()
     @input.val ''
   
   handleExport: ->
@@ -158,12 +167,15 @@ Captionr.Views.App = Backbone.View.extend
   redo: ->
     @collection.destroyAllModels()
 
-Captionr.mainVideo = new Captionr.Models.Video({url: 'http://www.viddler.com/explore/codeschool/videos/201.mp4?vfid=7281015b4829d4d969f2f6f3e554defc'})
+Captionr.mainVideo = new Captionr.Models.Video({url: 'http://www.viddler.com/explore/codeschool/videos/201.mp4?vfid=7281015b4829d4d969f2f6f3e554defc', id: 1})
 
 Captionr.mainVideoView = new Captionr.Views.Video
   model: Captionr.mainVideo
 
 $ ->
+  Captionr.markers = new Captionr.Collections.Markers()
+  Captionr.markers.initializeStore(Captionr.mainVideo.id)
+
   Captionr.app = new Captionr.Views.App
-    collection: new Captionr.Collections.Markers()
+    collection: Captionr.markers
     video: Captionr.mainVideoView
