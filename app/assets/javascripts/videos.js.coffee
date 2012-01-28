@@ -1,11 +1,32 @@
 
+window.toSRTTime = (seconds) ->
+  hours = Math.floor ( seconds / 3600 )
+  minutes = Math.floor ( seconds / 60 )
+  milliseconds = seconds.toString().split('.')[1].slice(0, 3)
+  seconds = Math.floor(seconds) % 60
+
+  sprintf "%02d:%02d:%02d,%s", hours, minutes, seconds, milliseconds
+
 Captionr.Models.Video = Backbone.Model.extend {}
 
-Captionr.Models.Marker = Backbone.Model.extend {}
+Captionr.Models.Marker = Backbone.Model.extend
+  toSRT: (num) ->
+    """
+      #{num}
+      #{toSRTTime(@get('startTime'))} --> #{toSRTTime(@get('endTime'))}
+      #{@get('caption')}\n\n
+    """
 
 Captionr.Collections.Markers = Backbone.Collection.extend
   model: Captionr.Models.Marker
   localStorage: new Store("markers")
+
+  toSRT: ->
+    @reduce(
+      (srt, marker, index) ->
+        srt += marker.toSRT(index+1)
+      ""
+    )
 
 class VideoPlaybackSession
   constructor: (@video) ->
@@ -66,11 +87,13 @@ Captionr.Views.App = Backbone.View.extend
   events:
     'keyup #new-marker': 'manageCaptionSession'
     'keypress #new-marker': 'createOnEnter'
+    'click #export': 'handleExport'
 
   initialize: ->
-    _.bindAll @, 'render', 'createOnEnter'
+    _.bindAll @, 'render', 'createOnEnter', 'handleExport'
 
     @input = $('#new-marker')
+    @output = $('#output')
     @video = @options.video
 
     @collection.bind 'add', @addOne, @
@@ -110,6 +133,11 @@ Captionr.Views.App = Backbone.View.extend
       endTime: @video.getLastSessionEndTime()
     
     @input.val ''
+  
+  handleExport: ->
+    srt = @collection.toSRT()
+    @output.val(srt)
+    @output.show()
 
 Captionr.mainVideo = new Captionr.Models.Video({url: 'http://www.viddler.com/explore/codeschool/videos/201.mp4?vfid=7281015b4829d4d969f2f6f3e554defc'})
 
