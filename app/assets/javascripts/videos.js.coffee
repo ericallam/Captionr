@@ -7,6 +7,13 @@ window.toSRTTime = (seconds) ->
 
   sprintf "%02d:%02d:%02d,%s", hours, minutes, seconds, milliseconds
 
+# TODO:
+# remove chapter markers
+# remove all chapter markers
+# change start/end times on markers
+# Enter video url
+# highlight chapter markers as the are active
+
 Captionr.Models.Video = Backbone.Model.extend {}
 
 Captionr.Models.Marker = Backbone.Model.extend
@@ -27,6 +34,10 @@ Captionr.Collections.Markers = Backbone.Collection.extend
         srt += marker.toSRT(index+1)
       ""
     )
+
+  destroyAllModels: ->
+    _.each _.clone(@models), (model) ->
+      model.destroy()
 
 class VideoPlaybackSession
   constructor: (@video) ->
@@ -75,12 +86,16 @@ Captionr.Views.Marker = Backbone.View.extend
   )
 
   initialize: ->
-    _.bindAll @, 'render'
+    _.bindAll @, 'render', 'remove'
     @model.bind 'change', @render
+    @model.bind 'destroy', @remove
 
   render: ->
     $(@el).html @template(@model.toJSON())
     @
+
+  remove: ->
+    $(@el).remove()
 
 Captionr.Views.App = Backbone.View.extend
   el: '#captionr'
@@ -88,9 +103,10 @@ Captionr.Views.App = Backbone.View.extend
     'keyup #new-marker': 'manageCaptionSession'
     'keypress #new-marker': 'createOnEnter'
     'click #export': 'handleExport'
+    'click #redo': 'redo'
 
   initialize: ->
-    _.bindAll @, 'render', 'createOnEnter', 'handleExport'
+    _.bindAll @, 'render', 'createOnEnter', 'handleExport', 'redo'
 
     @input = $('#new-marker')
     @output = $('#output')
@@ -138,6 +154,9 @@ Captionr.Views.App = Backbone.View.extend
     srt = @collection.toSRT()
     @output.val(srt)
     @output.show()
+
+  redo: ->
+    @collection.destroyAllModels()
 
 Captionr.mainVideo = new Captionr.Models.Video({url: 'http://www.viddler.com/explore/codeschool/videos/201.mp4?vfid=7281015b4829d4d969f2f6f3e554defc'})
 
