@@ -24,6 +24,17 @@ window.prettifyTime = (seconds) ->
 # change start/end times on markers
 # Enter video url
 # highlight chapter markers as the are active
+class VideoPlaybackSession
+  offset: 0.5
+
+  constructor: (@video) ->
+  
+  start: ->
+    startTime = @video.currentTime - @offset
+    @startTime = startTime
+
+  currentTime: ->
+    @video.currentTime - @offset
 
 Captionr.Models.Video = Backbone.Model.extend {}
 
@@ -39,10 +50,14 @@ Captionr.Models.Marker = Backbone.Model.extend
     _.extend _.clone(@attributes), 
       prettyStartTime: prettifyTime(@get('startTime'))
       prettyEndTime: prettifyTime(@get('endTime')) 
+
+  wrapsTime: (time) ->
+    @get('startTime') <= time <= @get('endTime')
     
 
 Captionr.Collections.Markers = Backbone.Collection.extend
   model: Captionr.Models.Marker
+  comparator: (marker) -> -marker.startTime
 
   initializeStore: (videoId) ->
     @localStorage = new Store "markers-video-#{videoId}"
@@ -58,18 +73,11 @@ Captionr.Collections.Markers = Backbone.Collection.extend
     _.each _.clone(@models), (model) ->
       model.destroy()
 
-class VideoPlaybackSession
-  offset: 0.5
+  highlightFor: (time) ->
+    markers = @groupBy (marker) -> marker.wrapsTime(time)
 
-  constructor: (@video) ->
-  
-  start: ->
-    startTime = @video.played.end(@video.played.length - 1) - @offset
-    @startTime = startTime
-
-  currentTime: ->
-    @video.played.end(@video.played.length - 1) - @offset
-  
+    _.each markers[true], (m) -> m.set highlighted: true
+    _.each markers[false], (m) -> m.set highlighted: false
 
 Captionr.Views.Video = Backbone.View.extend
   template: _.template(
@@ -98,6 +106,9 @@ Captionr.Views.Video = Backbone.View.extend
   getCurrentSessionTime: ->
     @session.currentTime()
 
+  getCurrentTime: ->
+    $('video')[0].currentTime
+
 
 Captionr.Views.Marker = Backbone.View.extend
   tagName: 'li'
@@ -114,8 +125,9 @@ Captionr.Views.Marker = Backbone.View.extend
 
   initialize: ->
     _.bindAll @, 'render', 'remove', 'clear'
-    @model.bind 'change', @render
-    @model.bind 'destroy', @remove
+    @model.bind 'change', @render, @
+    @model.bind 'change:highlighted', @toggleHighlight, @
+    @model.bind 'destroy', @remove, @
 
   render: ->
     $(@el).html @template(@model.toJSON())
@@ -127,6 +139,12 @@ Captionr.Views.Marker = Backbone.View.extend
   clear: ->
     @model.destroy()
 
+  toggleHighlight: ->
+    if @model.get('highlighted')
+      $(@el).addClass 'highlighted'
+    else
+      $(@el).removeClass 'highlighted'
+
 Captionr.Views.App = Backbone.View.extend
   el: '#captionr'
   events:
@@ -136,7 +154,8 @@ Captionr.Views.App = Backbone.View.extend
     'click #redo': 'redo'
 
   initialize: ->
-    _.bindAll @, 'render', 'createOnEnter', 'handleExport', 'redo'
+    _.bindAll @, 'render', 'createOnEnter', 
+                  'handleExport', 'redo', 'handleTimeUpdate'
 
     @input = $('#new-marker')
     @output = $('#output')
@@ -150,6 +169,8 @@ Captionr.Views.App = Backbone.View.extend
   render: ->
     if $('video').length == 0
       $('#video-holder').append @options.video.render().el
+
+      $('video').on 'timeupdate', @handleTimeUpdate
 
     @
   
@@ -185,6 +206,10 @@ Captionr.Views.App = Backbone.View.extend
 
   redo: ->
     @collection.destroyAllModels()
+
+  handleTimeUpdate: (e) ->
+    @collection.highlightFor @video.getCurrentTime()
+
 
 Captionr.mainVideo = new Captionr.Models.Video({url: 'http://www.viddler.com/explore/codeschool/videos/201.mp4?vfid=7281015b4829d4d969f2f6f3e554defc', id: 1})
 
