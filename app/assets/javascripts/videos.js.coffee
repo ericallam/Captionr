@@ -7,6 +7,19 @@ window.toSRTTime = (seconds) ->
 
   sprintf "%02d:%02d:%02d,%s", hours, minutes, seconds, milliseconds
 
+window.prettifyTime = (seconds) ->
+  hours = Math.floor ( seconds / 3600 )
+  minutes = Math.floor ( seconds / 60 )
+  milliseconds = seconds.toString().split('.')[1].slice(0, 2)
+  seconds = Math.floor(seconds) % 60
+
+  if hours > 0
+    sprintf "%02d:%02d:%02d,%s", hours, minutes, seconds, milliseconds
+  else
+    sprintf "%02d:%02d.%s", minutes, seconds, milliseconds
+
+
+
 # TODO:
 # change start/end times on markers
 # Enter video url
@@ -21,6 +34,12 @@ Captionr.Models.Marker = Backbone.Model.extend
       #{toSRTTime(@get('startTime'))} --> #{toSRTTime(@get('endTime'))}
       #{@get('caption')}\n\n
     """
+
+  toJSON: ->
+    _.extend _.clone(@attributes), 
+      prettyStartTime: prettifyTime(@get('startTime'))
+      prettyEndTime: prettifyTime(@get('endTime')) 
+    
 
 Captionr.Collections.Markers = Backbone.Collection.extend
   model: Captionr.Models.Marker
@@ -55,7 +74,7 @@ class VideoPlaybackSession
 Captionr.Views.Video = Backbone.View.extend
   template: _.template(
     '''
-      <video src="{{ url }}" controls></video> 
+      <video src="{{ url }}" controls width=460></video> 
     '''
   )
 
@@ -84,9 +103,9 @@ Captionr.Views.Marker = Backbone.View.extend
   tagName: 'li'
   template: _.template(
     '''
-      <a href='#' class=remove>X</a>
-      <span class='start-time'>{{ startTime }}</span> - <span class='end-time'>{{ endTime }}</span>
-      <blockquote>{{ caption }}</blockquote>
+      <button class='remove btn danger small'>X</button>
+      <span class='start-time'>{{ prettyStartTime }}</span> -> <span class='end-time'>{{ prettyEndTime }}</span>
+      <blockquote><p>{{ caption }}</p></blockquote>
     '''
   )
 

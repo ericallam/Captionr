@@ -1,11 +1,23 @@
-<div id='captionr'>
-  <div id='video-holder'></div>
-  <button id=export>Export to SRT</button>
-  <button id=redo>Start Over</button>
-  <textarea id=output cols=50 rows=5 style='display: none'></textarea>
-  <fieldset>
-    <label for='new-marker'>Enter Caption:</label>
-    <input type='text' id='new-marker'></input>
-  </fieldset>
-  <ul id='marker-list'></ul>
+<div id=captionr class=container>
+  <div class=page-header>
+    Video 1
+  </div>
+
+  <div class=row>
+    <div class=span8>
+      <div id=video-holder></div>
+
+      <fieldset>
+        <input class=span8 type=text id=new-marker placeholder='Enter caption'></input>
+        <br />
+      </fieldset>
+    </div>
+
+    <div class=span8>
+      <ul id=marker-list class=unstyled></ul>
+      <button class='btn primary' id=export>Export</button>
+      <button class='btn danger' id=redo>Clear All</button>
+      <textarea id=output cols=50 rows=5 style='display: none; margin-top: 10px' class=span8></textarea>
+    </div>
+  </div>
 </div>
