@@ -35,7 +35,71 @@ class VideoPlaybackSession
   currentTime: ->
     @video.currentTime - @offset
 
-Captionr.Models.Video = Backbone.Model.extend {}
+Captionr.Models.Video = Backbone.Model.extend
+  localStorage: new Store("videos")
+  initialize: ->
+    @markers = new Captionr.Collections.Markers()
+    @markers.initializeStore @id
+
+
+Captionr.Collections.VideoList = Backbone.Collection.extend
+  model: Captionr.Models.Video
+  localStorage: new Store("videos")
+
+Captionr.Views.VideoListItem = Backbone.View.extend
+  tagName: 'li'
+  template: _.template '''
+    <span class=url>{{ url }}</span>
+    <button class='show btn small'>caption</button>
+  '''
+
+  events:
+    'click .show': 'show'
+
+  initialize: ->
+    _.bindAll @, 'show'
+    @model.on 'change', @render, @
+
+  render: ->
+    @$el.html @template(@model.toJSON())
+    @
+
+  show: ->
+    Captionr.router.navigate "videos/#{@model.id}", trigger: true
+
+Captionr.Views.VideoList = Backbone.View.extend
+  tagName: 'ul'
+  template: _.template '''
+    <fieldset>
+      <input class=span8 type=text id=new-video placeholder='Enter new video mp4 url'></input>
+      <br />
+    </fieldset>
+  '''
+
+  events:
+    'keypress #new-video': 'createOnEnter'
+
+  initialize: ->
+    _.bindAll @, 'createOnEnter'
+    @collection.on 'reset', @render, @
+    @collection.on 'add', @addOne, @
+  
+  render: ->
+    if @$('input').length == 0
+      @$el.append @template()
+    @collection.forEach @addOne, @
+    @
+
+  createOnEnter: ->
+    url = @$('input').val()
+
+    return if url.length == 0
+
+    @collection.create url: url
+
+  addOne: (model) ->
+    videoListItem = new Captionr.Views.VideoListItem(model: model)
+    @$el.append videoListItem.render().el
 
 Captionr.Models.Marker = Backbone.Model.extend
   toSRT: (num) ->
@@ -163,6 +227,29 @@ Captionr.Views.Marker = Backbone.View.extend
 
 Captionr.Views.App = Backbone.View.extend
   el: '#captionr'
+  template: _.template '''
+    <div class=page-header>
+      Caption Video
+    </div>
+
+    <div class=row>
+      <div class=span8>
+        <div id=video-holder></div>
+
+        <fieldset>
+          <input class=span8 type=text id=new-marker placeholder='Enter caption'></input>
+          <br />
+        </fieldset>
+      </div>
+
+      <div class=span8>
+        <ul id=marker-list class=unstyled></ul>
+        <button class='btn primary' id=export>Export</button>
+        <button class='btn danger' id=redo>Clear All</button>
+        <textarea id=output cols=50 rows=5 style='display: none; margin-top: 10px' class=span8></textarea>
+      </div>
+    </div>
+  '''
   events:
     'keyup #new-marker': 'manageCaptionSession'
     'keypress #new-marker': 'createOnEnter'
@@ -184,10 +271,13 @@ Captionr.Views.App = Backbone.View.extend
     @collection.fetch()
 
   render: ->
-    if $('video').length == 0
-      $('#video-holder').append @options.video.render().el
+    if @$('video').length == 0
+      @$el.html @template()
+      @$('#video-holder').append @options.video.render().el
 
-      $('video').on 'timeupdate', @handleTimeUpdate
+      @$('video').on 'timeupdate', @handleTimeUpdate
+      @input = @$('#new-marker')
+      @output = @$('#output')
 
     @
   
@@ -241,16 +331,31 @@ Captionr.Views.App = Backbone.View.extend
     @collection.highlightFor @video.getCurrentTime()
 
 
-# update the url and id here to point to a specific video
-Captionr.mainVideo = new Captionr.Models.Video({url: 'http://www.viddler.com/file/d/e0d993a1.mp4?vfid=728604534126d7dbde50f0d306dbd5ed', id: 1})
+Captionr.router = new (Backbone.Router.extend(
+  routes:
+    'videos/:id': 'show'
+    '': 'index'
 
-Captionr.mainVideoView = new Captionr.Views.Video
-  model: Captionr.mainVideo
+  show: (id) ->
+    video = new Captionr.Models.Video(id: id)
+    video.fetch()
+
+    videoView = new Captionr.Views.Video(model: video)
+    app = new Captionr.Views.App(collection: video.markers, video: videoView)
+    video.markers.fetch()
+
+  index: ->
+    $('#captionr').empty()
+
+    videoList = new Captionr.Collections.VideoList()
+    videoListView = new Captionr.Views.VideoList collection: videoList
+    $('#captionr').append videoListView.render().el
+    videoList.fetch()
+
+  start: ->
+    Backbone.history.start()
+
+))
 
 $ ->
-  Captionr.markers = new Captionr.Collections.Markers()
-  Captionr.markers.initializeStore(Captionr.mainVideo.id)
-
-  Captionr.app = new Captionr.Views.App
-    collection: Captionr.markers
-    video: Captionr.mainVideoView
+  Captionr.router.start()
