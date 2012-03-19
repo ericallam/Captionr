@@ -29,8 +29,7 @@ class VideoPlaybackSession
   constructor: (@video) ->
   
   start: ->
-    startTime = @video.currentTime - @offset
-    @startTime = startTime
+    @startTime = @currentTime()
 
   currentTime: ->
     @video.currentTime - @offset
@@ -154,9 +153,11 @@ Captionr.Views.Video = Backbone.View.extend
     @
 
   jumpBack: ->
+    @resetCaptionSession()
     @setCurrentTime @getCurrentTime() - 5
 
   jumpForward: ->
+    @resetCaptionSession()
     @setCurrentTime @getCurrentTime() + 5
 
   startedCaptionSession: ->
@@ -165,6 +166,9 @@ Captionr.Views.Video = Backbone.View.extend
   startCaptionSession: ->
     @session = new VideoPlaybackSession($('video')[0])
     @session.start()
+
+  resetCaptionSession: ->
+    @session = null
 
   endCaptionSession: ->
     @session = null
@@ -182,6 +186,7 @@ Captionr.Views.Video = Backbone.View.extend
     $('video')[0].currentTime
 
   seekTo: (time) ->
+    @resetCaptionSession()
     @setCurrentTime time
 
 
