@@ -214,7 +214,7 @@ Captionr.Views.Marker = Backbone.View.extend
     $(@el).remove()
 
   goto: ->
-    Captionr.app.seekTo @model.get('startTime')
+    Captionr.router.seekTo @model.get('startTime')
 
   clear: ->
     @model.destroy()
@@ -341,7 +341,7 @@ Captionr.router = new (Backbone.Router.extend(
     video.fetch()
 
     videoView = new Captionr.Views.Video(model: video)
-    app = new Captionr.Views.App(collection: video.markers, video: videoView)
+    @app = new Captionr.Views.App(collection: video.markers, video: videoView)
     video.markers.fetch()
 
   index: ->
@@ -354,6 +354,9 @@ Captionr.router = new (Backbone.Router.extend(
 
   start: ->
     Backbone.history.start()
+
+  seekTo: (time) ->
+    @app?.seekTo time
 
 ))
 
