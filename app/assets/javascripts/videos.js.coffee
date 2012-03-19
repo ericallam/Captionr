@@ -23,7 +23,6 @@ window.prettifyTime = (seconds) ->
 # TODO:
 # change start/end times on markers
 # Enter video url
-# highlight chapter markers as the are active
 class VideoPlaybackSession
   offset: 0.5
 
@@ -57,7 +56,7 @@ Captionr.Models.Marker = Backbone.Model.extend
 
 Captionr.Collections.Markers = Backbone.Collection.extend
   model: Captionr.Models.Marker
-  comparator: (marker) -> -marker.startTime
+  comparator: (marker) -> marker.get('startTime')
 
   initializeStore: (videoId) ->
     @localStorage = new Store "markers-video-#{videoId}"
@@ -90,6 +89,12 @@ Captionr.Views.Video = Backbone.View.extend
     $(@el).html(@template(@model.toJSON()))
     @
 
+  jumpBack: ->
+    @setCurrentTime @getCurrentTime() - 5
+
+  jumpForward: ->
+    @setCurrentTime @getCurrentTime() + 5
+
   startedCaptionSession: ->
     @session?
 
@@ -106,8 +111,14 @@ Captionr.Views.Video = Backbone.View.extend
   getCurrentSessionTime: ->
     @session.currentTime()
 
+  setCurrentTime: (newCurrentTime) ->
+    $('video')[0].currentTime = newCurrentTime
+
   getCurrentTime: ->
     $('video')[0].currentTime
+
+  seekTo: (time) ->
+    @setCurrentTime time
 
 
 Captionr.Views.Marker = Backbone.View.extend
@@ -115,6 +126,7 @@ Captionr.Views.Marker = Backbone.View.extend
   template: _.template(
     '''
       <button class='remove btn danger small'>X</button>
+      <button class='goto btn small'>-></button>
       <span class='start-time'>{{ prettyStartTime }}</span> -> <span class='end-time'>{{ prettyEndTime }}</span>
       <blockquote><p>{{ caption }}</p></blockquote>
     '''
@@ -122,9 +134,10 @@ Captionr.Views.Marker = Backbone.View.extend
 
   events:
     'click .remove': 'clear'
+    'click .goto': 'goto'
 
   initialize: ->
-    _.bindAll @, 'render', 'remove', 'clear'
+    _.bindAll @, 'render', 'remove', 'clear', 'goto'
     @model.bind 'change', @render, @
     @model.bind 'change:highlighted', @toggleHighlight, @
     @model.bind 'destroy', @remove, @
@@ -135,6 +148,9 @@ Captionr.Views.Marker = Backbone.View.extend
 
   remove: ->
     $(@el).remove()
+
+  goto: ->
+    Captionr.app.seekTo @model.get('startTime')
 
   clear: ->
     @model.destroy()
@@ -150,12 +166,13 @@ Captionr.Views.App = Backbone.View.extend
   events:
     'keyup #new-marker': 'manageCaptionSession'
     'keypress #new-marker': 'createOnEnter'
+    'keydown #new-marker': 'seekVideo'
     'click #export': 'handleExport'
     'click #redo': 'redo'
 
   initialize: ->
     _.bindAll @, 'render', 'createOnEnter', 
-                  'handleExport', 'redo', 'handleTimeUpdate'
+                  'handleExport', 'redo', 'handleTimeUpdate', 'seekVideo'
 
     @input = $('#new-marker')
     @output = $('#output')
@@ -182,9 +199,22 @@ Captionr.Views.App = Backbone.View.extend
     @collection.each @addOne
 
   manageCaptionSession: (e) ->
-    return if e.keyCode == 13 # they pressed enter, let createOnEnter handle this
+    return if e.keyCode == 13 or e.keyCode == 37 or e.keyCode == 39 # they pressed enter, let createOnEnter handle this
 
     @video.startCaptionSession() unless @video.startedCaptionSession()
+
+  seekTo: (time) ->
+    @video.seekTo time
+
+  seekVideo: (e) ->
+    text = @input.val()
+
+    return if text.length > 0
+
+    if e.originalEvent.keyIdentifier == "Left"
+      @video.jumpBack()
+    else if e.originalEvent.keyIdentifier == "Right"
+      @video.jumpForward()
   
   createOnEnter: (e) ->
     text = @input.val()
@@ -211,7 +241,8 @@ Captionr.Views.App = Backbone.View.extend
     @collection.highlightFor @video.getCurrentTime()
 
 
-Captionr.mainVideo = new Captionr.Models.Video({url: 'http://www.viddler.com/explore/codeschool/videos/201.mp4?vfid=7281015b4829d4d969f2f6f3e554defc', id: 1})
+# update the url and id here to point to a specific video
+Captionr.mainVideo = new Captionr.Models.Video({url: 'http://www.viddler.com/file/d/e0d993a1.mp4?vfid=728604534126d7dbde50f0d306dbd5ed', id: 1})
 
 Captionr.mainVideoView = new Captionr.Views.Video
   model: Captionr.mainVideo
